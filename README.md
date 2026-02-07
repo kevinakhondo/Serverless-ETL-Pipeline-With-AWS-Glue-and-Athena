@@ -434,9 +434,145 @@ resource "aws_glue_trigger" "catalog_processed_data" {
 }
 ```
 
+#### File 6: Terraform/athena.tf
 
+```
+# Athena Workgroup
+resource "aws_athena_workgroup" "data_lake" {
+  name        = "${var.project_name}-workgroup"
+  description = "Workgroup for data lake queries"
 
+  configuration {
+    enforce_workgroup_configuration    = true
+    publish_cloudwatch_metrics_enabled = true
 
+    result_configuration {
+      output_location = "s3://${aws_s3_bucket.athena_results.id}/output/"
+
+      encryption_configuration {
+        encryption_option = "SSE_S3"
+      }
+    }
+
+    engine_version {
+      selected_engine_version = "Athena engine version 3"
+    }
+  }
+}
+
+# Named queries for common analytics
+resource "aws_athena_named_query" "sales_by_region" {
+  name        = "sales_by_region"
+  workgroup   = aws_athena_workgroup.data_lake.id
+  database    = aws_glue_catalog_database.data_lake_db.name
+  description = "Analyze sales by region"
+
+  query = <<-EOQ
+    SELECT 
+      region,
+      COUNT(*) as transaction_count,
+      SUM(total_amount) as total_sales,
+      ROUND(AVG(total_amount), 2) as avg_order_value
+    FROM transactions
+    GROUP BY region
+    ORDER BY total_sales DESC;
+  EOQ
+}
+
+resource "aws_athena_named_query" "top_products" {
+  name        = "top_products"
+  workgroup   = aws_athena_workgroup.data_lake.id
+  database    = aws_glue_catalog_database.data_lake_db.name
+  description = "Top performing products"
+
+  query = <<-EOQ
+    SELECT 
+      product,
+      category,
+      COUNT(*) as orders,
+      SUM(quantity) as units_sold,
+      ROUND(SUM(total_amount), 2) as revenue
+    FROM transactions
+    GROUP BY product, category
+    ORDER BY revenue DESC
+    LIMIT 10;
+  EOQ
+}
+
+resource "aws_athena_named_query" "monthly_trends" {
+  name        = "monthly_trends"
+  workgroup   = aws_athena_workgroup.data_lake.id
+  database    = aws_glue_catalog_database.data_lake_db.name
+  description = "Monthly revenue trends"
+
+  query = <<-EOQ
+    SELECT 
+      year,
+      month,
+      COUNT(*) as transactions,
+      ROUND(SUM(total_amount), 2) as monthly_revenue
+    FROM transactions
+    GROUP BY year, month
+    ORDER BY year, month;
+  EOQ
+}
+```
+
+#### File 7: Terraform/outputs
+
+```
+output "s3_bucket_name" {
+  description = "Name of the S3 data lake bucket"
+  value       = aws_s3_bucket.data_lake.id
+}
+
+output "athena_results_bucket" {
+  description = "Name of the Athena results bucket"
+  value       = aws_s3_bucket.athena_results.id
+}
+
+output "glue_database_name" {
+  description = "Name of the Glue database"
+  value       = aws_glue_catalog_database.data_lake_db.name
+}
+
+output "glue_workflow_name" {
+  description = "Name of the Glue workflow"
+  value       = aws_glue_workflow.etl_workflow.name
+}
+
+output "athena_workgroup" {
+  description = "Name of the Athena workgroup"
+  value       = aws_athena_workgroup.data_lake.id
+}
+
+output "raw_data_path" {
+  description = "S3 path for raw data"
+  value       = "s3://${aws_s3_bucket.data_lake.id}/raw/"
+}
+
+output "processed_data_path" {
+  description = "S3 path for processed data"
+  value       = "s3://${aws_s3_bucket.data_lake.id}/processed/"
+}
+
+output "next_steps" {
+  description = "Next steps to complete the setup"
+  value = <<-EOT
+    1. Upload sample data:
+       aws s3 cp transactions.csv s3://${aws_s3_bucket.data_lake.id}/raw/year=2024/month=01/
+    
+    2. Start the workflow:
+       aws glue start-workflow-run --name ${aws_glue_workflow.etl_workflow.name}
+    
+    3. Query in Athena:
+       - Open Athena console
+       - Select workgroup: ${aws_athena_workgroup.data_lake.id}
+       - Use database: ${aws_glue_catalog_database.data_lake_db.name}
+       - Run saved queries or create your own
+  EOT
+}
+```
 
 
 
