@@ -286,6 +286,168 @@ resource "aws_iam_role_policy" "glue_cloudwatch_policy" {
 }
 ```
 
+#### File 5: Terraform/glue.tf
+
+```
+# Glue Database
+resource "aws_glue_catalog_database" "data_lake_db" {
+  name        = "${var.project_name}_database"
+  description = "E-commerce data lake database"
+}
+
+# Glue Crawler for Raw Data
+resource "aws_glue_crawler" "raw_crawler" {
+  name          = "${var.project_name}-raw-crawler"
+  role          = aws_iam_role.glue_service_role.arn
+  database_name = aws_glue_catalog_database.data_lake_db.name
+
+  s3_target {
+    path = "s3://${aws_s3_bucket.data_lake.id}/raw/"
+  }
+
+  schema_change_policy {
+    delete_behavior = "LOG"
+    update_behavior = "UPDATE_IN_DATABASE"
+  }
+
+  configuration = jsonencode({
+    Version = 1.0
+    CrawlerOutput = {
+      Partitions = { AddOrUpdateBehavior = "InheritFromTable" }
+    }
+  })
+}
+
+# Glue Crawler for Processed Data
+resource "aws_glue_crawler" "processed_crawler" {
+  name          = "${var.project_name}-processed-crawler"
+  role          = aws_iam_role.glue_service_role.arn
+  database_name = aws_glue_catalog_database.data_lake_db.name
+
+  s3_target {
+    path = "s3://${aws_s3_bucket.data_lake.id}/processed/transactions/"
+  }
+
+  schema_change_policy {
+    delete_behavior = "LOG"
+    update_behavior = "UPDATE_IN_DATABASE"
+  }
+
+  configuration = jsonencode({
+    Version = 1.0
+    CrawlerOutput = {
+      Partitions = { AddOrUpdateBehavior = "InheritFromTable" }
+    }
+  })
+}
+
+# Glue ETL Job
+resource "aws_glue_job" "etl_job" {
+  name     = "${var.project_name}-etl-job"
+  role_arn = aws_iam_role.glue_service_role.arn
+  
+  glue_version      = var.glue_version
+  worker_type       = var.worker_type
+  number_of_workers = var.number_of_workers
+  
+  command {
+    name            = "glueetl"
+    script_location = "s3://${aws_s3_bucket.data_lake.id}/scripts/glue_etl_job.py"
+    python_version  = "3"
+  }
+
+  default_arguments = {
+    "--job-language"                     = "python"
+    "--job-bookmark-option"              = "job-bookmark-enable"
+    "--enable-metrics"                   = "true"
+    "--enable-spark-ui"                  = "true"
+    "--enable-job-insights"              = "true"
+    "--enable-glue-datacatalog"          = "true"
+    "--enable-continuous-cloudwatch-log" = "true"
+    "--SOURCE_BUCKET"                    = aws_s3_bucket.data_lake.id
+    "--TARGET_BUCKET"                    = aws_s3_bucket.data_lake.id
+    "--TempDir"                          = "s3://${aws_s3_bucket.data_lake.id}/temporary/"
+  }
+
+  execution_property {
+    max_concurrent_runs = 1
+  }
+
+  timeout = 60 # minutes
+}
+
+# Glue Workflow
+resource "aws_glue_workflow" "etl_workflow" {
+  name        = "${var.project_name}-workflow"
+  description = "End-to-end ETL workflow"
+}
+
+# Trigger: Start raw crawler on-demand
+resource "aws_glue_trigger" "start_raw_crawler" {
+  name          = "${var.project_name}-start-raw-crawler"
+  type          = "ON_DEMAND"
+  workflow_name = aws_glue_workflow.etl_workflow.name
+
+  actions {
+    crawler_name = aws_glue_crawler.raw_crawler.name
+  }
+}
+
+# Trigger: Run ETL job after raw crawler succeeds
+resource "aws_glue_trigger" "run_etl_job" {
+  name          = "${var.project_name}-run-etl-job"
+  type          = "CONDITIONAL"
+  workflow_name = aws_glue_workflow.etl_workflow.name
+
+  predicate {
+    conditions {
+      crawler_name = aws_glue_crawler.raw_crawler.name
+      crawl_state  = "SUCCEEDED"
+    }
+  }
+
+  actions {
+    job_name = aws_glue_job.etl_job.name
+  }
+
+  start_on_creation = true
+}
+
+# Trigger: Catalog processed data after ETL job succeeds
+resource "aws_glue_trigger" "catalog_processed_data" {
+  name          = "${var.project_name}-catalog-processed"
+  type          = "CONDITIONAL"
+  workflow_name = aws_glue_workflow.etl_workflow.name
+
+  predicate {
+    conditions {
+      job_name = aws_glue_job.etl_job.name
+      state    = "SUCCEEDED"
+    }
+  }
+
+  actions {
+    crawler_name = aws_glue_crawler.processed_crawler.name
+  }
+
+  start_on_creation = true
+}
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
