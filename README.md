@@ -118,7 +118,92 @@ locals {
 }
 ```
 
+#### File 3: Terraform/s3.tf
+We create our S3 data lake. We shall enable server-side encryption and bucket versioning.
 
+```
+# Main data lake bucket
+resource "aws_s3_bucket" "data_lake" {
+  bucket = local.bucket_name
+}
+
+resource "aws_s3_bucket_versioning" "data_lake" {
+  bucket = aws_s3_bucket.data_lake.id
+  
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "data_lake" {
+  bucket = aws_s3_bucket.data_lake.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+# Create folder structure
+resource "aws_s3_object" "raw_folder" {
+  bucket = aws_s3_bucket.data_lake.id
+  key    = "raw/"
+  content_type = "application/x-directory"
+}
+
+resource "aws_s3_object" "processed_folder" {
+  bucket = aws_s3_bucket.data_lake.id
+  key    = "processed/"
+  content_type = "application/x-directory"
+}
+
+resource "aws_s3_object" "curated_folder" {
+  bucket = aws_s3_bucket.data_lake.id
+  key    = "curated/"
+  content_type = "application/x-directory"
+}
+
+resource "aws_s3_object" "scripts_folder" {
+  bucket = aws_s3_bucket.data_lake.id
+  key    = "scripts/"
+  content_type = "application/x-directory"
+}
+
+# Upload Glue ETL script
+resource "aws_s3_object" "glue_etl_script" {
+  bucket = aws_s3_bucket.data_lake.id
+  key    = "scripts/glue_etl_job.py"
+  source = "${path.module}/../scripts/glue_etl_job.py"
+  etag   = filemd5("${path.module}/../scripts/glue_etl_job.py")
+}
+
+# Athena results bucket
+resource "aws_s3_bucket" "athena_results" {
+  bucket = local.athena_results_bucket
+}
+
+resource "aws_s3_bucket_versioning" "athena_results" {
+  bucket = aws_s3_bucket.athena_results.id
+  
+  versioning_configuration {
+    status = "Enabled"
+  }
+}
+
+resource "aws_s3_bucket_lifecycle_configuration" "athena_results" {
+  bucket = aws_s3_bucket.athena_results.id
+
+  rule {
+    id     = "delete-old-queries"
+    status = "Enabled"
+
+    expiration {
+      days = 30
+    }
+  }
+}
+``
 
 
 
