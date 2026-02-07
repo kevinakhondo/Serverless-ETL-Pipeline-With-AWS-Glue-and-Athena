@@ -574,7 +574,7 @@ output "next_steps" {
 }
 ```
 ### Creating the Glue ETL Job Scripts
-#### File: scripts/glue_etl_job.py
+#### File 1: scripts/glue_etl_job.py
 
 ```
 import sys
@@ -656,9 +656,75 @@ glueContext.write_dynamic_frame.from_options(
 print("ETL job completed successfully!")
 job.commit()
 ```
+#### File 2: generate_sample_data.py
 
+```
+import csv
+import random
+from datetime import datetime, timedelta
 
+# Configuration
+NUM_TRANSACTIONS = 1000
+OUTPUT_FILE = 'transactions.csv'
 
+# Sample data
+products = [
+    'Laptop', 'Mouse', 'Keyboard', 'Monitor', 'Headphones', 
+    'Webcam', 'USB Cable', 'Charger', 'SSD Drive', 'RAM'
+]
+categories = ['Electronics', 'Accessories', 'Peripherals', 'Storage']
+regions = ['us-east', 'us-west', 'eu-west', 'eu-central', 'ap-south', 'ap-northeast']
+
+# Generate transactions
+transactions = []
+start_date = datetime(2024, 1, 1)
+
+for i in range(NUM_TRANSACTIONS):
+    date = start_date + timedelta(
+        days=random.randint(0, 60),
+        hours=random.randint(0, 23),
+        minutes=random.randint(0, 59)
+    )
+    
+    transaction = {
+        'transaction_id': f'TXN{i:06d}',
+        'timestamp': date.strftime('%Y-%m-%d %H:%M:%S'),
+        'product': random.choice(products),
+        'category': random.choice(categories),
+        'quantity': random.randint(1, 5),
+        'price': round(random.uniform(10, 1000), 2),
+        'region': random.choice(regions),
+        'customer_id': f'CUST{random.randint(1, 200):05d}'
+    }
+    transactions.append(transaction)
+
+# Write to CSV
+with open(OUTPUT_FILE, 'w', newline='') as f:
+    writer = csv.DictWriter(f, fieldnames=transactions[0].keys())
+    writer.writeheader()
+    writer.writerows(transactions)
+
+print(f" Generated {len(transactions)} transactions in {OUTPUT_FILE}")
+print(f"Date range: {transactions[0]['timestamp']} to {transactions[-1]['timestamp']}")
+```
+
+### Deploy With Terraform
+
+```
+# Navigate to terraform directory
+cd terraform
+
+# Initialize Terraform
+terraform init
+
+# Review the plan
+terraform plan
+
+# Apply the configuration
+terraform apply
+
+# Type 'yes' when prompted
+```
 
 
 
