@@ -203,7 +203,88 @@ resource "aws_s3_bucket_lifecycle_configuration" "athena_results" {
     }
   }
 }
-``
+```
+#### File 4: Terraform/iam.tf
+We create a service role and attach a policy.
+
+```
+# Glue service role
+resource "aws_iam_role" "glue_service_role" {
+  name = "${var.project_name}-glue-service-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "glue.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
+
+# Attach AWS managed Glue service policy
+resource "aws_iam_role_policy_attachment" "glue_service" {
+  role       = aws_iam_role.glue_service_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSGlueServiceRole"
+}
+
+# Custom policy for S3 access
+resource "aws_iam_role_policy" "glue_s3_policy" {
+  name = "${var.project_name}-glue-s3-policy"
+  role = aws_iam_role.glue_service_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject",
+          "s3:DeleteObject"
+        ]
+        Resource = [
+          "${aws_s3_bucket.data_lake.arn}/*"
+        ]
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:ListBucket"
+        ]
+        Resource = [
+          aws_s3_bucket.data_lake.arn
+        ]
+      }
+    ]
+  })
+}
+
+# CloudWatch Logs policy
+resource "aws_iam_role_policy" "glue_cloudwatch_policy" {
+  name = "${var.project_name}-glue-cloudwatch-policy"
+  role = aws_iam_role.glue_service_role.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+```
 
 
 
