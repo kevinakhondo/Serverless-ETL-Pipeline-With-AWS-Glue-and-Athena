@@ -725,16 +725,129 @@ terraform apply
 
 # Type 'yes' when prompted
 ```
+#### Results of Deployment
+<img width="1680" height="670" alt="image" src="https://github.com/user-attachments/assets/5cd96fa5-bc56-434d-92fc-36d9bddaeb5a" />
+
+<img width="1680" height="670" alt="image" src="https://github.com/user-attachments/assets/aa0ebae5-5824-4375-8763-3770ca5bb6e6" />
+
+### Generate and Upload Sample Data
+#### Generate Sample Data
+Run the following scripts:
+
+```
+cd ~/glue-etl-pipeline/scripts
+
+# Run the Python script
+python3 generate_sample_data.py
+```
+The output is:
+<img width="624" height="59" alt="image" src="https://github.com/user-attachments/assets/cb0fb291-068b-4997-9cf7-3fe988fa54f0" />
+
+Verify that the files exists:
+
+```
+ls -lh transactions.csv
+# Preview the first few lines
+head -5 transactions.csv
+```
+The output is:
+
+<img width="624" height="115" alt="image" src="https://github.com/user-attachments/assets/16cafdd7-300e-4782-909e-9b30ea3575eb" />
+
+#### Upload the data to S3
+
+```
+# Get bucket name from Terraform
+cd ~/glue-etl-pipeline/terraform
+BUCKET_NAME=$(terraform output -raw s3_bucket_name)
+
+echo "Bucket name: $BUCKET_NAME"
+
+# Upload CSV to raw folder
+cd ~/glue-etl-pipeline/scripts
+aws s3 cp transactions.csv s3://${BUCKET_NAME}/raw/transactions.csv
+```
+The output is
+<img width="792" height="257" alt="image" src="https://github.com/user-attachments/assets/c34ea2ae-1c2c-42ef-86dd-4d6388eb2733" />
+
+### Run the ETL Pipeline
+#### Start the workflow
+
+```
+# Get workflow name
+WORKFLOW_NAME=$(cd ~/glue-etl-pipeline/terraform && terraform output -raw glue_workflow_name)
+
+echo "Starting workflow: $WORKFLOW_NAME"
+
+# Trigger the workflow
+aws glue start-workflow-run --name ${WORKFLOW_NAME}
+```
+<img width="979" height="103" alt="image" src="https://github.com/user-attachments/assets/12caa790-a905-4d91-92ce-0b8d3aa3d20a" />
+
+#### Monitor Progress
+
+```
+# Get the run ID
+RUN_ID=$(aws glue get-workflow-runs --name ${WORKFLOW_NAME} --max-results 1 --query 'Runs[0].WorkflowRunId' --output text)
+
+echo "Workflow Run ID: $RUN_ID"
+
+# Check status
+aws glue get-workflow-run \
+  --name ${WORKFLOW_NAME} \
+  --run-id ${RUN_ID} \
+  --query 'Run.{Status:Status,StartedOn:StartedOn}' \
+  --output table
+```
+<img width="1151" height="221" alt="image" src="https://github.com/user-attachments/assets/fbb12a52-1cd0-40f2-afd1-ed2471413b81" />
+
+The workflow does the following:
+ - Run raw crawler (discovers CSV schema, creates "raw" table)
+ - Run ETL job (transforms CSV → Parquet)
+ - Run processed crawler (catalogs Parquet files
 
 
+Keep Checking the status
 
+```
+# Run this every minute
+watch -n 60 "aws glue get-workflow-run --name ${WORKFLOW_NAME} --run-id ${RUN_ID} --query 'Run.Status' --output text"
+```
 
+#### Verification
 
+Verify if raw crawler succeeded:
 
+```
+aws glue get-crawler --name ecommerce-data-lake-raw-crawler --query 'Crawler.LastCrawl.Status'
+```
+<img width="1151" height="37" alt="image" src="https://github.com/user-attachments/assets/207da918-728d-4653-ac05-3510c8c5de66" />
 
+verify if raw table was created:
 
+```
+aws glue get-tables --database-name ecommerce-data-lake_database --query 'TableList[*].Name'
 
+```
+<img width="1151" height="77" alt="image" src="https://github.com/user-attachments/assets/9d0d7d9c-c8bc-490f-8cea-8ee8629906f9" />
 
+Verify if the ETL job succeeded:
+
+```
+aws glue get-job-runs --job-name ecommerce-data-lake-etl-job --max-results 1 --query 'JobRuns[0].JobRunState'
+# Should return: "SUCCEEDED"
+```
+<img width="1151" height="34" alt="image" src="https://github.com/user-attachments/assets/cca56871-3b2a-48fb-b5f0-838d9c83ae9f" />
+
+Check if Proceed Files Exits
+
+```
+aws s3 ls s3://${BUCKET_NAME}/processed/transactions/ --recursive
+# Should show Parquet files like:
+# processed/transactions/year=2024/month=1/run-xxx.snappy.parquet
+# processed/transactions/year=2024/month=2/run-xxx.snappy.parquet
+```
+<img width="1151" height="206" alt="image" src="https://github.com/user-attachments/assets/94465297-4824-4d5b-88ea-14386757e8a3" />
 
 
 
