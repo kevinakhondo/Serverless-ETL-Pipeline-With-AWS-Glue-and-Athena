@@ -850,11 +850,31 @@ aws s3 ls s3://${BUCKET_NAME}/processed/transactions/ --recursive
 <img width="1151" height="206" alt="image" src="https://github.com/user-attachments/assets/94465297-4824-4d5b-88ea-14386757e8a3" />
 
 
+### Query Data With Amazon Athena
+Go to your AWS console. Search Athena. 
+- Click on Workgroups in the left sidebar
+- Select ecommerce-data-lake-workgroup
+- Click Switch workgroup
+
+  <img width="1680" height="371" alt="image" src="https://github.com/user-attachments/assets/71f3c9bd-e4b8-4da9-9426-74957c2ec4a2" />
+
+Go to Query editor tabs
+<img width="1680" height="848" alt="image" src="https://github.com/user-attachments/assets/9f0cb28b-adbc-46d9-a078-e0e61c887f2b" />
+
+Ensure that:
+- Data Source = AWSDataCatalog
+- Database = ecommerce-data-lake_database
+- Change Workgroup to ecommerce-data-lake-workgroup
+
+  Then, run the queries
+
+  <img width="1680" height="848" alt="image" src="https://github.com/user-attachments/assets/2e5d943f-ef43-471c-bb2b-210e93fd0f7a" />
+
+<img width="1680" height="888" alt="image" src="https://github.com/user-attachments/assets/bb6dd2a4-23c7-4e23-b7f3-b7b7d67ed5ad" />
 
 
-
-
-
+Under saved queries, run them.
+<img width="1680" height="888" alt="image" src="https://github.com/user-attachments/assets/8dac5dc3-2e98-480e-aa33-c7f20446ea99" />
 
 
 
